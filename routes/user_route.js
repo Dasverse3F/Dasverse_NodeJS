@@ -22,11 +22,11 @@ router.post('/signup', async (req, res) => {
 });
 
 // 로그인 라우트
-router.post('/signin', async (req, res) => {
+router.get('/signin', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ where: { email } }); //email, password 기준으로 사용자 찾음 // 여기서 password를 가져와서 비교해야됨
-    if (!user || !(await user.verifyPassword(password))) { //유저 없거나 비밀번호 일치x경우 처리
+    const user = await User.findOne({ where: { email } }); 
+    if (!user || !(await user.verifyPassword(password)) || user.status == "D") { //유저 없거나 비밀번호 일치x경우 처리, 탈퇴한 회원 인경우
       res.status(401).json({ error_message: "유저가 존재하지 않거나 비밀번호가 일치하지 않습니다.", status: "E" });
     } else { //사용자 존재, 비밀번호 일치 시
       const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT 생성 후 아이디를 Payload로 하고 환경 변수 JWT_SECRET으로 서명 (?)
@@ -39,12 +39,22 @@ router.post('/signin', async (req, res) => {
 });
 
 //회원탈퇴 라우트
-router.delete('/withdrawal', async (req, res) => {
+router.delete('/delete', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.delete({ where: { email } });
+    const now = require('../custom_modules/nowDate');
+    const { email, password, status } = req.body;
+    const user = await User.findOne({ where: { email } }); 
+    console.log(user);
+    if (!user || !(await user.verifyPassword(password))) { //유저 없거나 비밀번호 일치x경우 처리
+      res.status(401).json({ error_message: "유저가 존재하지 않거나 비밀번호가 일치하지 않습니다.", status: "E" });
+    } else { //사용자 존재, 비밀번호 일치 시
+      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT 생성 후 아이디를 Payload로 하고 환경 변수 JWT_SECRET으로 서명 (?)
+      const user_result = await User.update({ status: "0", mod_date: now }, { where: { email } }); 
+      res.json({ user: user_result, token, status: "S" });
+    }
   } catch (error) {
-
+    console.log(error);
+    res.status(500).json({ error_message: error.toString(), status: "E" });
   }
 });
 

@@ -1,12 +1,5 @@
-const { Sequelize, DataTypes, Model } = require('sequelize');
+const { sequelize, DataTypes, Model } = require('../custom_modules/database');
 const bcrypt = require('bcryptjs');
-
-// 데이터베이스 연결
-const sequelize = new Sequelize(process.env.DB_DATABASE, process.env.DB_USER, process.env.DB_PASSWORD, { //dbname, user, pw
-  host: process.env.DB_HOST,
-  dialect: 'mysql',
-});
-
 class Users extends Model {
   async verifyPassword(password) {
     return await bcrypt.compare(password, this.password);
