@@ -11,11 +11,11 @@ app.use(bodyParser.json());
 // 회원가입 라우트
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, nickname, name, phone } = req.body; //req.body에서 추출
+    const { email, password, nickname, name, phone } = req.body; //HTTP Request의 Body에서 추출 *객체구조 분해* 이용
     const UUID = uuidv1();
-    const user = await User.create({ UUID, email, password, nickname, name, phone }); //새로운 사용자 객체 생성 후 데이터베이스에 저장  <<< TODO: INSERT가 어떻게 진행되는지 >> connection 직접 생성하는 걸로 변경
-    const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT 생성 후 아이디를 Payload로 하고 환경 변수 JWT_SECRET으로 서명 (?)
-    res.sendStatus(201).json({ token, message: "회원가입 성공", status: "S" });
+    const user = await User.create({ UUID: UUID, email: email, password: password, nickname: nickname, name: name, phone: phone }); //await User.create 메소드를 통해 DB에 접근하여 INSERT
+    const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT
+    res.sendStatus(201).json({ token: token, message: "회원가입 성공", status: "S" }); //HTTP response 클라이언트에게 송신
   } catch (error) {
     res.status(500).json({ error_message: error.toString(), status: "E" });
   }
@@ -25,13 +25,13 @@ router.post('/signup', async (req, res) => {
 router.get('/signin', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email: email } });
 
-    if (!user || !(await user.verifyPassword(password)) || user.status == "0") { //유저 없거나 비밀번호 일치x경우 처리, 탈퇴한 회원 인경우
-      res.status(401).json({ error_message: "유저가 존재하지 않거나 비밀번호가 일치하지 않습니다.", status: "E" });
+    if (!user || !(await user.verifyPassword(password)) || user.status == "0") { //유저 없거나 비밀번호 일치하지 않거나 탈퇴한 회원 일 경우
+      res.status(401).json({ error_message: "유저가 존재하지 않거나 비밀번호가 일치하지 않습니다.", status: "E" }); //에러 처리
 
-    } else { //사용자 존재, 비밀번호 일치 시
-      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT 생성 후 아이디를 Payload로 하고 환경 변수 JWT_SECRET으로 서명 (?)
+    } else {
+      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT
       res.json({ user: user, token, status: "S" });
     }
   } catch (error) {
@@ -44,14 +44,14 @@ router.get('/signin', async (req, res) => {
 router.delete('/delete', async (req, res) => {
   try {
     const { email, password, status } = req.body;
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email: email } }); //회원 탈퇴할 회원 조회 (email 기준)
 
-    if (!user || !(await user.verifyPassword(password))) { //유저 없거나 비밀번호 일치x경우 처리
+    if (!user || !(await user.verifyPassword(password))) { //유저 없거나 비밀번호 일치하지 않는 경우
       res.status(401).json({ error_message: "유저가 존재하지 않거나 비밀번호가 일치하지 않습니다.", status: "E" });
 
-    } else { //사용자 존재, 비밀번호 일치 시
-      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT 생성 후 아이디를 Payload로 하고 환경 변수 JWT_SECRET으로 서명 (?)
-      const user_result = await User.update({ status: "0", mod_date: now }, { where: { email } });
+    } else {
+      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT
+      const user_result = await User.update({ status: "0", mod_date: now }, { where: { email } }); //해당 회원의 상태를 탈퇴로 변경
       res.json({ user: user_result, token, status: "S" });
     }
   } catch (error) {
@@ -63,19 +63,18 @@ router.delete('/delete', async (req, res) => {
 //정보 수정 라우트
 router.put('/modify', async (req, res) => {
   try {
-    const now = require('../custom_modules/nowDate');
+    const now = require('../custom_modules/nowDate'); //커스텀 모듈을 이용해 현재 시간 불러옴
     const { email, password, nickname, name, phone } = req.body;
-    const user = await User.findOne({ where: { email: email } });
+    const user = await User.findOne({ where: { email: email } }); //email 기준으로 정보 수정 할 유저 DB에서 찾아와서 인스턴스화(Users 모델)
 
     if (!user) { //유저가 없는경우
       res.status(401).json({ error_message: "유저가 존재하지않습니다.", status: "E" });
 
     } else {
-      const userUUID = user.UUID;
-      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' });
-      const updatedUser = { UUID: userUUID, email: email, password: password, nickname: nickname, name: name, phone: phone, mod_date: now };
+      const token = jwt.sign({ userUUID: user.UUID }, process.env.JWT_SECRET, { expiresIn: '24h' }); //JWT
+      const updatedUser = { UUID: user.UUID, email: email, password: password, nickname: nickname, name: name, phone: phone, mod_date: now }; //UPDATE된 유저 결과를 보여주기 위한 객체
       const userCount = await User.update({ pasword: password, nickname: nickname, name: name, phone: phone, mod_date: now }, { where: { UUID: userUUID } });  //DB접근 (user UUID를 기준으로 데이터 UPDATE)
-      res.json({ count: userCount, update_result_user: updatedUser, token, status: "S" });
+      res.json({ count: userCount, update_result_user: updatedUser, token, status: "S" }); //UPDATE결과 HTTP response로 전송
     }
   } catch (error) {
     console.log(error);
